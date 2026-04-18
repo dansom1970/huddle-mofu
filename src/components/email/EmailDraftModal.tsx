@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, Loader2 } from 'lucide-react'
+import { Copy, Check, Loader2, ExternalLink } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ export default function EmailDraftModal({ contact, open, onClose, onSent }: Emai
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sending, setSending] = useState(false)
+  const [logging, setLogging] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [drafted, setDrafted] = useState(false)
@@ -64,7 +64,7 @@ export default function EmailDraftModal({ contact, open, onClose, onSent }: Emai
       setSubject(data.subject || '')
       setBody(data.body || '')
       setDrafted(true)
-    } catch (e) {
+    } catch {
       setError('Failed to generate draft. Please try again.')
     } finally {
       setLoading(false)
@@ -72,37 +72,48 @@ export default function EmailDraftModal({ contact, open, onClose, onSent }: Emai
   }
 
   const handleCopy = async () => {
-    const text = `Subject: ${subject}\n\n${body}`
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleMarkSent = async () => {
-    if (!contact) return
-    setSending(true)
+  const buildMailtoLink = () => {
+    if (!contact?.email) return null
+    const params = new URLSearchParams({
+      subject,
+      body,
+    })
+    return `mailto:${contact.email}?${params}`
+  }
+
+  const handleOpenInEmail = async () => {
+    // Log interaction first, then open email client
+    setLogging(true)
     try {
       const today = new Date().toISOString().split('T')[0]
       await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contact_id: contact.id,
+          contact_id: contact!.id,
           date: today,
           type: 'email-sent',
-          summary: `KIT email sent. Subject: ${subject}`,
+          summary: `KIT email drafted and opened. Subject: ${subject}`,
           email_content: body,
-          logged_by: contact.contact_owner || 'Unknown',
+          logged_by: contact!.contact_owner || 'Unknown',
         }),
       })
       onSent?.()
-      onClose()
-      resetState()
     } catch {
-      setError('Failed to log interaction.')
+      // Non-fatal — still open the email client
     } finally {
-      setSending(false)
+      setLogging(false)
     }
+
+    const mailto = buildMailtoLink()
+    if (mailto) window.location.href = mailto
+    onClose()
+    resetState()
   }
 
   return (
@@ -111,14 +122,16 @@ export default function EmailDraftModal({ contact, open, onClose, onSent }: Emai
         <DialogHeader>
           <DialogTitle>Draft KIT Email</DialogTitle>
           <DialogDescription>
-            {contact ? `For ${contact.full_name} at ${contact.company || 'unknown company'}` : ''}
+            {contact
+              ? `For ${contact.full_name}${contact.company ? ` at ${contact.company}` : ''}`
+              : ''}
           </DialogDescription>
         </DialogHeader>
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-[#1A3C2E]" />
-            <p className="text-sm text-gray-500">Drafting personalised email…</p>
+            <p className="text-sm text-gray-500">Reading email history and drafting…</p>
           </div>
         )}
 
@@ -157,17 +170,29 @@ export default function EmailDraftModal({ contact, open, onClose, onSent }: Emai
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
                   {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied ? 'Copied' : 'Copy to clipboard'}
+                  {copied ? 'Copied' : 'Copy'}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={generateDraft} className="text-gray-500">
                   Regenerate
                 </Button>
               </div>
-              <Button onClick={handleMarkSent} disabled={sending} className="gap-1.5">
-                {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Mark as sent + log
+              <Button
+                onClick={handleOpenInEmail}
+                disabled={logging || !contact?.email}
+                className="gap-1.5"
+                title={!contact?.email ? 'No email address on file' : undefined}
+              >
+                {logging
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <ExternalLink className="h-3.5 w-3.5" />
+                }
+                Open in email + log
               </Button>
             </div>
+
+            {!contact?.email && (
+              <p className="text-xs text-amber-600">No email address saved for this contact — add one to enable the send button.</p>
+            )}
           </div>
         )}
       </DialogContent>

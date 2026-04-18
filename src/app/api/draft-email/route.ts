@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { fetchGmailThreads } from '@/lib/gmail'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
   }
 
+  // Fetch last 3 logged interactions from Supabase
   const { data: interactions } = await supabase
     .from('interactions')
     .select('*')
@@ -23,9 +25,26 @@ export async function POST(req: NextRequest) {
     .order('date', { ascending: false })
     .limit(3)
 
-  const interactionContext = interactions?.map((i) =>
+  const loggedContext = interactions?.map((i) =>
     `${i.date} — ${i.type}: ${i.summary}${i.email_content ? '\nEmail content: ' + i.email_content : ''}`
-  ).join('\n\n') || 'No previous interactions logged.'
+  ).join('\n\n') || 'No interactions logged.'
+
+  // Try to fetch real Gmail threads for the logged-in user
+  let gmailContext = ''
+  if (contact.email) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: tokenRow } = await supabase
+        .from('gmail_tokens')
+        .select('access_token, refresh_token, token_expiry')
+        .eq('user_id', user.id)
+        .single()
+
+      if (tokenRow) {
+        gmailContext = await fetchGmailThreads(tokenRow, contact.email)
+      }
+    }
+  }
 
   const anthropic = new Anthropic()
 
@@ -45,8 +64,8 @@ KIT Stage: ${contact.kit_stage}
 Notes: ${contact.notes || 'None'}
 Tags: ${contact.tags?.join(', ') || 'None'}
 
-Previous interactions:
-${interactionContext}`,
+Logged interactions:
+${loggedContext}${gmailContext ? `\n\nReal email thread history (use this for specific references):\n${gmailContext}` : ''}`,
       },
     ],
   })

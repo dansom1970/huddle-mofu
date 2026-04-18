@@ -1,12 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Users, ListChecks, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, ListChecks, Settings, LogOut } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 interface SidebarProps {
   queueCount?: number
+  userEmail?: string
+  ownerName?: string | null
 }
 
 const navItems = [
@@ -16,8 +19,16 @@ const navItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export default function Sidebar({ queueCount = 0 }: SidebarProps) {
+export default function Sidebar({ queueCount = 0, userEmail, ownerName }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <aside className="w-56 min-h-screen bg-[#1A3C2E] flex flex-col">
@@ -56,8 +67,20 @@ export default function Sidebar({ queueCount = 0 }: SidebarProps) {
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t border-white/10">
-        <p className="text-white/40 text-xs">Huddle Creative © 2024</p>
+      <div className="px-4 py-4 border-t border-white/10 space-y-2">
+        {userEmail && (
+          <div className="px-1">
+            <p className="text-white/80 text-xs font-medium truncate">{ownerName || userEmail}</p>
+            {ownerName && <p className="text-white/40 text-xs truncate">{userEmail}</p>}
+          </div>
+        )}
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 w-full px-3 py-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 text-xs transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sign out
+        </button>
       </div>
     </aside>
   )
