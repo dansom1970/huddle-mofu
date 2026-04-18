@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Users, ListChecks, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, ListChecks, Settings, LogOut, Inbox } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface SidebarProps {
@@ -15,6 +15,7 @@ interface SidebarProps {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/queue', label: 'Outreach Queue', icon: ListChecks, badgeKey: 'queue' },
+  { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/contacts', label: 'All Contacts', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
